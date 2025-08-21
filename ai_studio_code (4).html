@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可調色動態光球 (巨大波浪版)</title>
+    <style>
+        /*
+         * 基本樣式
+         */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        /* 
+         * 使用 Flexbox 佈局，讓球體和控制器垂直排列，並在頁面中居中。
+         */
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /*
+         * 光暈效果的外層容器
+         */
+        #glow-wrapper {
+            position: relative;
+            width: 90%; 
+            aspect-ratio: 1 / 1;
+            max-width: 500px;
+            z-index: 2;
+            --glow-rgb: 100, 150, 255;
+            animation: pulsate 5s ease-in-out infinite;
+        }
+
+        /*
+         * 球體的主要容器
+         */
+        #sphere-container {
+            position: relative;
+            width: 100%; 
+            height: 100%;
+            clip-path: url(#sphereClip);
+            background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.1), rgba(100, 150, 255, 0.1) 50%, rgba(150, 50, 255, 0.2) 100%);
+            box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+
+        /*
+         * 呼吸效果關鍵幀 (使用 filter: drop-shadow)
+         */
+        @keyframes pulsate {
+            0% {
+                transform: scale(0.96);
+                filter: drop-shadow(0 0 10px rgba(var(--glow-rgb), 0.3)) drop-shadow(0 0 20px rgba(var(--glow-rgb), 0.3));
+            }
+            50% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 25px rgba(var(--glow-rgb), 0.7)) drop-shadow(0 0 45px rgba(var(--glow-rgb), 0.7));
+            }
+            100% {
+                transform: scale(0.96);
+                filter: drop-shadow(0 0 10px rgba(var(--glow-rgb), 0.3)) drop-shadow(0 0 20px rgba(var(--glow-rgb), 0.3));
+            }
+        }
+        
+        #particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /*
+         * RGB 控制器的版面樣式
+         */
+        #controls {
+            position: relative;
+            z-index: 2;
+            width: 90%;
+            max-width: 400px;
+            box-sizing: border-box;
+            background-color: rgba(25, 25, 25, 0.75);
+            padding: 15px 20px;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            color: white;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider-container label {
+            font-weight: bold;
+            width: 20px;
+        }
+        
+        .slider-container input[type="range"] {
+            -webkit-appearance: none;
+            flex-grow: 1;
+            height: 5px;
+            border-radius: 5px;   
+            background: #555;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+
+        .slider-container input[type="range"]:hover {
+            opacity: 1;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%; 
+            background: #ddd;
+            cursor: pointer;
+        }
+
+        .slider-container input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ddd;
+            cursor: pointer;
+        }
+
+
+
+        .slider-container span {
+            width: 30px;
+            text-align: right;
+        }
+        
+        #toggleSpeedButton {
+            position: relative;
+            z-index: 2;
+            width: 90%;
+            max-width: 400px;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+            margin-top: -5px;
+        }
+
+        #toggleSpeedButton:hover {
+            transform: scale(1.02);
+        }
+        
+        #toggleSpeedButton.pause-mode {
+            background-color: #ff8c00;
+        }
+
+        #wave-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 300px; 
+            background: #000;
+            clip-path: url(#waveClip);
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="glow-wrapper">
+        <div id="sphere-container">
+            <canvas id="particle-canvas"></canvas>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="slider-container">
+            <label for="red">R</label>
+            <input type="range" id="red" min="0" max="255" value="100">
+            <span id="red-value">100</span>
+        </div>
+        <div class="slider-container">
+            <label for="green">G</label>
+            <input type="range" id="green" min="0" max="255" value="150">
+            <span id="green-value">150</span>
+        </div>
+        <div class="slider-container">
+            <label for="blue">B</label>
+            <input type="range" id="blue" min="0" max="255" value="255">
+            <span id="blue-value">255</span>
+        </div>
+    </div>
+    
+    <button id="toggleSpeedButton">啟 動</button>
+    
+    <div id="wave-bottom"></div>
+
+    <svg width="0" height="0">
+        <defs>
+            <clipPath id="waveClip" clipPathUnits="objectBoundingBox">
+                <path id="wave-path"></path>
+            </clipPath>
+            <clipPath id="sphereClip">
+                <path id="sphere-path"></path>
+            </clipPath>
+        </defs>
+    </svg>
+
+
+    <script>
+        // --- 獲取 DOM 元素 ---
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('sphere-container');
+        const glowWrapper = document.getElementById('glow-wrapper');
+
+        const redSlider = document.getElementById('red');
+        const greenSlider = document.getElementById('green');
+        const blueSlider = document.getElementById('blue');
+        const redValueSpan = document.getElementById('red-value');
+        const greenValueSpan = document.getElementById('green-value');
+        const blueValueSpan = document.getElementById('blue-value');
+        
+        const toggleSpeedButton = document.getElementById('toggleSpeedButton');
+
+        // --- 全局變數 ---
+        let particlesArray = [];
+        let baseColor = {
+            r: parseInt(redSlider.value),
+            g: parseInt(greenSlider.value),
+            b: parseInt(blueSlider.value)
+        };
+        
+        const SLOW_SPEED_MULTIPLIER = 1 / 3;
+        const FAST_SPEED_MULTIPLIER = 2;
+        let speedMultiplier = SLOW_SPEED_MULTIPLIER;
+        let isFastModeActive = false;
+
+
+        // --- 粒子類別 (Particle Class) ---
+        class Particle {
+            constructor(x, y, size, color, speedX, speedY) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.color = color;
+                this.speedX = speedX;
+                this.speedY = speedY;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = Math.max(1, this.size / 4);
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            update() {
+                const diameter = Math.min(canvas.width, canvas.height);
+                const radius = diameter / 2;
+                const dist = Math.sqrt(Math.pow(this.x - radius, 2) + Math.pow(this.y - radius, 2));
+
+                if (dist + this.size > radius) {
+                    const normalX = (this.x - radius) / dist;
+                    const normalY = (this.y - radius) / dist;
+                    const dotProduct = this.speedX * normalX + this.speedY * normalY;
+                    this.speedX -= 2 * dotProduct * normalX;
+                    this.speedY -= 2 * dotProduct * normalY;
+                }
+
+                this.x += this.speedX * speedMultiplier;
+                this.y += this.speedY * speedMultiplier;
+                this.draw();
+            }
+        }
+
+        // --- 核心功能函數 ---
+        function init() {
+            const size = container.clientWidth;
+            canvas.width = size;
+            canvas.height = size;
+            const radius = size / 2;
+
+            particlesArray = [];
+            const numberOfParticles = 80;
+            for (let i = 0; i < numberOfParticles; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const r = Math.random() * radius * 0.9;
+                const x = Math.cos(angle) * r + radius;
+                const y = Math.sin(angle) * r + radius;
+                const particleSize = Math.random() * 10 + 4; 
+                const speedX = (Math.random() - 0.5) * 1.2;
+                const speedY = (Math.random() - 0.5) * 1.2;
+
+                const r_offset = (Math.random() - 0.5) * 60;
+                const g_offset = (Math.random() - 0.5) * 60;
+                const b_offset = (Math.random() - 0.5) * 60;
+
+                const particleR = Math.max(0, Math.min(255, baseColor.r + r_offset));
+                const particleG = Math.max(0, Math.min(255, baseColor.g + g_offset));
+                const particleB = Math.max(0, Math.min(255, baseColor.b + b_offset));
+                
+                const color = `rgba(${particleR}, ${particleG}, ${particleB}, 0.8)`;
+
+                particlesArray.push(new Particle(x, y, particleSize, color, speedX, speedY));
+            }
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (particlesArray.length > 0) {
+                particlesArray.forEach(particle => {
+                    particle.update();
+                });
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // --- 事件監聽器與處理函數 ---
+        function handleColorChange() {
+            baseColor.r = parseInt(redSlider.value);
+            baseColor.g = parseInt(greenSlider.value);
+            baseColor.b = parseInt(blueSlider.value);
+            
+            redValueSpan.textContent = baseColor.r;
+            greenValueSpan.textContent = baseColor.g;
+            blueValueSpan.textContent = baseColor.b;
+
+            const newGlowRgb = `${baseColor.r}, ${baseColor.g}, ${baseColor.b}`;
+            glowWrapper.style.setProperty('--glow-rgb', newGlowRgb);
+            
+            init();
+        }
+
+        redSlider.addEventListener('input', handleColorChange);
+        greenSlider.addEventListener('input', handleColorChange);
+        blueSlider.addEventListener('input', handleColorChange);
+
+        toggleSpeedButton.addEventListener('click', () => {
+            isFastModeActive = !isFastModeActive;
+
+            if (isFastModeActive) {
+                speedMultiplier = FAST_SPEED_MULTIPLIER;
+                toggleSpeedButton.textContent = '暫 停';
+                toggleSpeedButton.classList.add('pause-mode');
+                isAmoebaActive = true; 
+            } else {
+                speedMultiplier = SLOW_SPEED_MULTIPLIER;
+                toggleSpeedButton.textContent = '啟 動';
+                toggleSpeedButton.classList.remove('pause-mode');
+                isAmoebaActive = false; 
+            }
+        });
+
+        new ResizeObserver(() => {
+            init();
+        }).observe(container);
+
+        // --- 初始設置與啟動 ---
+        handleColorChange();
+        animate();
+
+
+        /*
+        |--------------------------------------------------
+        | === 球體邊緣變形動畫 (Amoeba/Wave Effect) ===
+        |--------------------------------------------------
+        */
+        const spherePath = document.getElementById('sphere-path');
+        let amoebaTime = 0;
+        let isAmoebaActive = false;
+        let currentAmplitude = 0;
+        
+        const TARGET_AMPLITUDE = 15;
+        const LERP_FACTOR = 0.05;
+        // === 修改：將變形速度加倍 ===
+        const amoebaSpeed = 0.04; 
+        const amoebaFrequency = 5;
+        const breathingSpeed = 0.7;
+        const breathingAmount = 0.05;
+
+        function animateSphereShape() {
+            const target = isAmoebaActive ? TARGET_AMPLITUDE : 0;
+            currentAmplitude += (target - currentAmplitude) * LERP_FACTOR;
+
+            amoebaTime += amoebaSpeed;
+            const size = container.clientWidth;
+            const center = size / 2;
+            const baseRadius = size / 2 - TARGET_AMPLITUDE;
+
+            const breathingFactor = 1 + (Math.sin(amoebaTime * breathingSpeed) * breathingAmount);
+            const effectiveRadius = baseRadius * breathingFactor;
+
+            const shapePoints = [];
+            const segments = 60; 
+
+            for (let i = 0; i < segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                
+                const distortion = Math.sin(angle * amoebaFrequency + amoebaTime) * currentAmplitude;
+                const radius = effectiveRadius + distortion;
+                
+                const x = center + Math.cos(angle) * radius;
+                const y = center + Math.sin(angle) * radius;
+                
+                shapePoints.push({ x, y });
+            }
+            
+            const tension = 0.8;
+            let pathData = `M ${shapePoints[0].x.toFixed(2)} ${shapePoints[0].y.toFixed(2)}`;
+
+            for (let i = 0; i < segments; i++) {
+                const p0 = shapePoints[(i - 1 + segments) % segments];
+                const p1 = shapePoints[i];
+                const p2 = shapePoints[(i + 1) % segments];
+                const p3 = shapePoints[(i + 2) % segments];
+
+                const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
+                const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
+                const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
+                const cp2y = p2.y - (p3.y - p1.y) / 6 * tension;
+
+                pathData += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+            }
+            pathData += 'Z';
+            
+            spherePath.setAttribute('d', pathData);
+            
+            requestAnimationFrame(animateSphereShape);
+        }
+        
+        animateSphereShape();
+
+        /*
+        |--------------------------------------------------
+        | === 底部波浪動畫 (巨大變形版) ===
+        |--------------------------------------------------
+        */
+        const wavePath = document.getElementById('wave-path');
+        let waveTime = 0;
+        
+        const waveSpeed = 0.008;      
+        const breathSpeed = 0.7;       
+        const mainWaveFrequency = 2.0;       
+        const baseAmplitude = 0.1;       
+        const breathAmplitude = 0.45;        
+        const detailWaveFrequency = 8;  
+        const detailWaveAmplitude = 0.04; 
+        const yOffset = 0.65;                
+
+        function animateWave() {
+            waveTime += waveSpeed;
+            const segments = 100;
+            const points = [];
+            const currentMainAmplitude = baseAmplitude + (Math.sin(waveTime * breathSpeed * Math.PI) * breathAmplitude);
+            const startY = yOffset + Math.sin(waveTime * Math.PI * 2) * currentMainAmplitude;
+            points.push(`M 0,${startY.toFixed(3)}`);
+
+            for (let i = 1; i <= segments; i++) {
+                const x = i / segments;
+                const mainWaveValue = Math.sin((x * mainWaveFrequency * Math.PI * 2) + (waveTime * Math.PI * 2));
+                const detailWaveValue = Math.sin((x * detailWaveFrequency * Math.PI * 2) + (waveTime * 1.8 * Math.PI * 2));
+                const y = yOffset + (mainWaveValue * currentMainAmplitude) + (detailWaveValue * detailWaveAmplitude);
+                points.push(`L ${x.toFixed(3)},${y.toFixed(3)}`);
+            }
+
+            points.push("L 1,1");
+            points.push("L 0,1");
+            points.push("Z");
+            wavePath.setAttribute('d', points.join(' '));
+            requestAnimationFrame(animateWave);
+        }
+
+        animateWave();
+
+    </script>
+</body>
+</html>
